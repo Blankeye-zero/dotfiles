@@ -7,6 +7,17 @@
       "*.env.*": "deny",
       "*.*.env": "deny",
       "*.env.example": "allow",
+      "*.env.sample": "allow",
+      "*.env.template": "allow",
+      "*.env.test": "deny",
+      "*local.env": "deny",
+      "*local.oci.env": "deny",
+      "*tfstate": "deny",
+      "*.tfstate.*": "deny",
+      "*.tfvars": "deny",
+      "*.tfvars.example": "allow",
+      "*.venv": "deny",
+      "*.venv/*": "deny",
       "*node_modules": {
         "action": "deny",
         "reason": "node_modules is installed dependency output, not project source"
@@ -30,5 +41,5 @@
       "format *": "deny"
     }
   },
-  "yoloMode": true
+  "yoloMode": false
 }
