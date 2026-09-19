@@ -6,9 +6,8 @@
  *
  * - Raw reasoning streams into the panel and is hidden from the main chat.
  * - /traces toggles the panel (expanded / collapsed).
- * - Footer shows split token economics: one line per model used in the session
- *   (labeled prime/worker via devflow config), usage attributed to the model
- *   that produced each message.
+ * - Footer shows split token economics: one line per configured role, plus one
+ *   summed "other" line, with usage attributed to the model that produced it.
  *
  * Note: TUI mode only.
  */
@@ -167,11 +166,19 @@ function addUsage(totals: Totals, usage?: UsageLike): void {
   totals.cost += usage.cost?.total ?? 0;
 }
 
+function addTotals(target: Totals, source: Totals): void {
+  target.input += source.input;
+  target.output += source.output;
+  target.cacheRead += source.cacheRead;
+  target.cacheWrite += source.cacheWrite;
+  target.cost += source.cost;
+}
+
 /**
- * Renders pi's native footer with one usage line per model used in the session,
- * attributing each message's usage to the model that produced it. Lines are
- * labeled plan/worker from the devflow config, prime for the /model selection
- * used in non-plan workloads.
+ * Renders pi's native footer with one usage line per configured role, plus one
+ * summed "other" line, attributing each message's usage to its model. Lines
+ * are labeled plan/worker from the devflow config, prime for the active
+ * /model selection, and other for all remaining models.
  */
 class ReasoningFooter {
   constructor(
@@ -253,13 +260,36 @@ class ReasoningFooter {
     if (sessionName) pwd = `${pwd} • ${sessionName}`;
     lines.push(truncateToWidth(th.fg("dim", pwd), width, th.fg("dim", "...")));
 
-    // One usage line per model (insertion order = first use in session).
+    // One usage line per configured role, plus one summed line for all other models.
     const providerCount = this.footerData.getAvailableProviderCount();
-    for (const [key, t] of perModel) {
-      const slash = key.indexOf("/");
-      const provider = slash >= 0 ? key.slice(0, slash) : key;
-      const id = slash >= 0 ? key.slice(slash + 1) : key;
+    let other: ModelTotals | undefined;
+    const rows: Array<{ key?: string; label: string; totals: ModelTotals }> = [];
+    for (const [key, totals] of perModel) {
+      let label: string;
+      if (key === devflowRefs.planner) label = "plan";
+      else if (key === devflowRefs.worker) label = "worker";
+      else if (key === activeKey) label = "prime";
+      else {
+        if (!other) other = { ...createTotals() };
+        addTotals(other, totals);
+        continue;
+      }
+      rows.push({ key, label, totals });
+    }
+    if (other) {
+      const prompt = other.input + other.cacheRead + other.cacheWrite;
+      if (prompt > 0) other.hitRate = (other.cacheRead / prompt) * 100;
+      rows.push({ label: "other", totals: other });
+    }
+    const roleOrder = ["plan", "worker", "prime", "other"];
+    rows.sort((a, b) => roleOrder.indexOf(a.label) - roleOrder.indexOf(b.label));
+
+    for (const row of rows) {
+      const { key, label, totals: t } = row;
       const isActive = key === activeKey;
+      const slash = key?.indexOf("/") ?? -1;
+      const provider = key && slash >= 0 ? key.slice(0, slash) : key;
+      const id = key && slash >= 0 ? key.slice(slash + 1) : key;
 
       const parts: string[] = [];
       if (t.input) parts.push(`↑${formatTokens(t.input)}`);
@@ -273,21 +303,13 @@ class ReasoningFooter {
         parts.push(`${contextDisplay} (auto)`);
       }
 
-      // plan = devflow planner, worker = devflow worker, prime = the active
-      // /model selection for non-plan workloads, other = stale leftovers.
-      let label: string;
-      if (key === devflowRefs.planner) label = "plan";
-      else if (key === devflowRefs.worker) label = "worker";
-      else if (isActive) label = "prime";
-      else label = "other";
-
-      let right = id;
+      let right = id ?? "";
       if (isActive && ctx.model?.reasoning) {
         const level = ctx.thinkingLevel || "off";
         right = level === "off" ? `${right} • thinking off` : `${right} • ${level}`;
       }
-      if (providerCount > 1) right = `(${provider}) ${right}`;
-      lines.push(this.layout(parts.join(" "), `${label} • ${right}`, width));
+      if (providerCount > 1 && label !== "other") right = `(${provider}) ${right}`;
+      lines.push(this.layout(parts.join(" "), label === "other" ? "other" : `${label} • ${right}`, width));
     }
 
     // Remaining extension statuses, rendered as colored chips: devflow first,
