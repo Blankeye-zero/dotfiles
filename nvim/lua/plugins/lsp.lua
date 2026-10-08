@@ -20,6 +20,8 @@ return {
 				"rust_analyzer", -- Rust
 				"terraformls",
 			},
+			-- jdtls is started by nvim-jdtls (java.lua), not vim.lsp.enable
+			automatic_enable = { exclude = { "jdtls" } },
 		},
 	},
 

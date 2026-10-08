@@ -1,5 +1,5 @@
 > **Automated install:** every winget package below can be installed in one shot with
-> `powershell -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\Projects\envlinks\scripts\install-deps.ps1`
+> `powershell -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\Projects\dotfiles\scripts\install-deps.ps1`
 > (add `-NvimOnly` to skip the general dev tools). Non-winget items remain manual (see script output).
 
 - nvm-windows - `winget install CoreyButler.NVMforWindows`
@@ -19,7 +19,7 @@
 - Aseprite - Not in winget (paid software, download from aseprite.org)
 - Neovim - `winget install Neovim.Neovim`
 - Crush Agent Harness - `winget install charmbracelet.crush`
-- Pi Agent Harness - `powershell -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\Projects\envlinks\scripts\build-pi.ps1` (clones, builds pi.exe via Bun, then generates pi.cmd; requires Node 24 + Bun)
+- Pi Agent Harness - `powershell -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\Projects\dotfiles\scripts\build-pi.ps1` (clones, builds pi.exe via Bun, then generates pi.cmd; requires Node 24 + Bun)
 - Bun - `winget install Oven-sh.Bun` (required by build-pi.ps1)
 - vcpkg - `git clone https://github.com/Microsoft/vcpkg.git`
 - CMake - `winget install Kitware.CMake`
@@ -30,6 +30,7 @@
 - Go - `winget install GoLang.Go` (for gopls)
 - Rust - `winget install Rustlang.Rustup` (for rust_analyzer)
 - Terraform - `winget install Hashicorp.Terraform` (for terraformls)
+- JDK 21+ - `winget install Microsoft.OpenJDK.21` (runs jdtls via nvim-jdtls; jdtls/java-debug-adapter/java-test auto-installed by Mason)
 
 ### Required by Telescope
 - ripgrep - `winget install BurntSushi.ripgrep.MSVC` (for live_grep)
@@ -47,7 +48,7 @@
 - GitHub CLI - `winget install GitHub.cli` (optional, for GitHub integration)
 
 ### Notes
-- clangd, basedpyright, ruff, lua_ls, delve: Auto-installed by Mason
+- clangd, basedpyright, ruff, lua_ls, delve, jdtls, java-debug-adapter, java-test: Auto-installed by Mason
 - Treesitter parsers: Auto-installed by nvim-treesitter
 - Telescope fzf-native: Built automatically using CMake
 

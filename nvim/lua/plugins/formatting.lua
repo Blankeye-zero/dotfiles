@@ -4,7 +4,11 @@ return {
     "WhoIsSethDaniel/mason-tool-installer.nvim",
     dependencies = { "mason-org/mason.nvim" },
     opts = {
-      ensure_installed = { "stylua", "prettierd", "prettier" },
+      ensure_installed = {
+        "stylua", "prettierd", "prettier",
+        -- Java (used by nvim-jdtls in java.lua, not mason-lspconfig)
+        "jdtls", "java-debug-adapter", "java-test",
+      },
     },
   },
 

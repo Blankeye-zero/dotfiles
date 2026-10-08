@@ -61,6 +61,7 @@ $nvimDeps = @(
     "GoLang.Go",                  # gopls
     "Rustlang.Rustup",            # rust_analyzer
     "Hashicorp.Terraform",        # terraformls
+    "Microsoft.OpenJDK.21",       # runs jdtls (nvim-jdtls); needs JDK 21+
     # Telescope
     "BurntSushi.ripgrep.MSVC",    # live_grep
     "sharkdp.fd",                 # find_files performance
@@ -124,7 +125,7 @@ Write-Host "  vcpkg             - git clone https://github.com/Microsoft/vcpkg.g
 Write-Host "  Pi Agent Harness  - powershell -NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\build-pi.ps1`""
 Write-Host ""
 Write-Host "=== Auto-installed by nvim itself (nothing to do) ===" -ForegroundColor DarkGray
-Write-Host "  Mason: clangd, basedpyright, ruff, lua_ls, delve, Prettier"
+Write-Host "  Mason: clangd, basedpyright, ruff, lua_ls, delve, Prettier, jdtls, java-debug-adapter, java-test"
 Write-Host "  nvim-treesitter: parsers;   Telescope: fzf-native (built via CMake)"
 
 if ($failed.Count) { exit 1 }

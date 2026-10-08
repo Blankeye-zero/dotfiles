@@ -1,5 +1,5 @@
 -- ~/.config/nvim/lua/plugins/treesitter.lua
-local ensure_installed = { "python", "lua", "toml", "json", "markdown" }
+local ensure_installed = { "python", "lua", "toml", "json", "markdown", "java" }
 
 return {
   {
