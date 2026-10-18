@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { appendFile, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { FrontendSession, type Annotation } from "./session.ts";
 
 /** Format annotations into compact lines for agent context (or /ui confirm). */
@@ -98,6 +98,23 @@ export default function (pi: ExtensionAPI) {
 		return session;
 	}
 
+	/** Strip the "@" file-mention prefix (and optional quotes) pi's editor leaves in args. */
+	function cleanPathArg(p: string): string {
+		return p.replace(/^@?/, "").replace(/^"|"$/g, "");
+	}
+
+	function makeSession(cwd: string): FrontendSession {
+		const s = new FrontendSession(join(cwd, ".pi", "annotations"));
+		s.onAnnotation = (annotation) => {
+			updateStatus();
+			ui?.notify(
+				`Annotation #${annotation.id}: "${annotation.note || "(no note)"}" — ${annotation.selector}`,
+				"info",
+			);
+		};
+		return s;
+	}
+
 	function updateStatus(): void {
 		if (!ui || !session) return;
 		const n = session.annotations.length;
@@ -135,12 +152,13 @@ export default function (pi: ExtensionAPI) {
 	async function resolveStartCommand(
 		ctx: ExtensionContext,
 		params: { script?: string; command?: string },
+		root: string,
 	): Promise<string> {
 		if (params.command) return params.command;
 
 		let scripts: Record<string, string> = {};
 		try {
-			scripts = JSON.parse(await readFile(join(ctx.cwd, "package.json"), "utf8")).scripts ?? {};
+			scripts = JSON.parse(await readFile(join(root, "package.json"), "utf8")).scripts ?? {};
 		} catch {
 			// no package.json
 		}
@@ -202,10 +220,18 @@ export default function (pi: ExtensionAPI) {
 		command?: string;
 	}): Promise<string> {
 		if (!session) throw new Error("Session not initialized.");
+
+		// Default root is the current dir; an explicit root switches projects.
+		const root = resolve(cleanPathArg(params.root ?? ctx.cwd));
+		if (root !== session.rootDir) {
+			await session.stopAll();
+			session = makeSession(root);
+		}
+
 		const url = params.url ?? DEFAULT_URL;
-		const command = await resolveStartCommand(ctx, params);
-		await ensureGitignore(ctx.cwd);
-		const serverMsg = await session.startServer(command, url, ctx.cwd);
+		const command = await resolveStartCommand(ctx, params, root);
+		await ensureGitignore(root);
+		const serverMsg = await session.startServer(command, url, root);
 		const browserMsg = await session.launchBrowser(url);
 		return [
 			serverMsg,
@@ -224,14 +250,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		ui = ctx.hasUI ? ctx.ui : null;
-		session = new FrontendSession(join(ctx.cwd, ".pi", "annotations"));
-		session.onAnnotation = (annotation) => {
-			updateStatus();
-			ui?.notify(
-				`Annotation #${annotation.id}: "${annotation.note || "(no note)"}" — ${annotation.selector}`,
-				"info",
-			);
-		};
+		session = makeSession(ctx.cwd);
 
 		// Restore plan-mode state across reloads/resumes.
 		planMode = false;
@@ -334,6 +353,7 @@ export default function (pi: ExtensionAPI) {
 				url: { type: "string", description: `App URL (default ${DEFAULT_URL})` },
 				script: { type: "string", description: "npm script name from package.json. If omitted, the user is asked." },
 				command: { type: "string", description: "Raw shell command override instead of an npm script" },
+				root: { type: "string", description: "Project root directory containing package.json (defaults to current working directory)" },
 			},
 		},
 		async execute(_id, params, _signal, onUpdate, ctx) {
@@ -549,7 +569,7 @@ export default function (pi: ExtensionAPI) {
 	// ---------------------------------------------------------------------------
 
 	pi.registerCommand("ui", {
-		description: "Control the UI annotator: /ui start [script] | stop | status | annotate [on|off] | plan | confirm | shots",
+		description: "Control the UI annotator: /ui start [npm-script|directory] | stop | status | annotate [on|off] | plan | confirm | shots",
 		getArgumentCompletions: (prefix) => {
 			const items = ["start", "stop", "status", "annotate", "plan", "confirm", "shots"]
 				.filter((s) => s.startsWith(prefix))
@@ -578,7 +598,11 @@ export default function (pi: ExtensionAPI) {
 				switch (sub) {
 					case "start": {
 						ctx.ui.notify("Starting frontend…", "info");
-						const message = await startFrontend(ctx, { script: rest[0] });
+						const arg = rest[0];
+					// An arg containing a path separator (or an existing dir) is a root dir; otherwise an npm script.
+					const cleaned = arg ? cleanPathArg(arg) : arg;
+					const isDir = cleaned != null && (/[/\\]/.test(cleaned) || existsSync(cleaned));
+					const message = await startFrontend(ctx, isDir ? { root: cleaned } : { script: arg });
 						ctx.ui.notify(message.split("\n")[0], "info");
 						break;
 					}

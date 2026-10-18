@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { type DomPathStep, installPiPicker } from "./picker.ts";
 
@@ -36,6 +36,8 @@ export interface ConsoleEntry {
 	text: string;
 	time: number;
 }
+
+/** Absolute path of the project root this session was created for. */
 
 const MAX_CONSOLE_ENTRIES = 200;
 const MAX_SERVER_LOG_LINES = 200;
@@ -168,10 +170,14 @@ export class FrontendSession {
 	readonly annotations: Annotation[] = [];
 	unreadCount = 0;
 	annotationsDir: string;
+	/** Normalized absolute project root (parent of annotationsDir's `.pi`). */
+	readonly rootDir: string;
 	onAnnotation?: (annotation: Annotation) => void;
 
 	constructor(annotationsDir: string) {
 		this.annotationsDir = annotationsDir;
+		// annotationsDir is <root>/.pi/annotations — root is two levels up.
+		this.rootDir = resolve(annotationsDir, '..', '..');
 	}
 
 	// -------------------------------------------------------------------------
