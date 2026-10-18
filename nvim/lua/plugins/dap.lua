@@ -5,12 +5,28 @@ return {
         dependencies = {
             "rcarriga/nvim-dap-ui",
             "nvim-neotest/nvim-nio",
+            "theHamsta/nvim-dap-virtual-text",
         },
         config = function()
             local dap = require("dap")
             local dapui = require("dapui")
 
             dapui.setup()
+            -- Inline variable values next to the code while stopped.
+            require("nvim-dap-virtual-text").setup({ virt_text_pos = "eol" })
+
+            -- Default signs are bare letters ("B", "->"); use icons and highlight the stopped line.
+            vim.api.nvim_set_hl(0, "DapStoppedLine", { default = true, link = "Visual" })
+            local signs = {
+                DapBreakpoint = { "●", "DiagnosticError" },
+                DapBreakpointCondition = { "◆", "DiagnosticWarn" },
+                DapLogPoint = { "◉", "DiagnosticInfo" },
+                DapBreakpointRejected = { "○", "DiagnosticHint" },
+                DapStopped = { "▶", "DiagnosticOk", "DapStoppedLine" },
+            }
+            for name, sign in pairs(signs) do
+                vim.fn.sign_define(name, { text = sign[1], texthl = sign[2], linehl = sign[3], numhl = "" })
+            end
 
             -- lldb-dap ships with the LLVM install (Mason's clangd install) and
             -- speaks DAP natively, so no separate debug adapter (e.g. codelldb) is needed.
@@ -62,6 +78,26 @@ return {
             vim.keymap.set("n", "<leader>dr", dap.repl.open, opts)
             vim.keymap.set("n", "<leader>du", dapui.toggle, opts)
             vim.keymap.set("n", "<leader>dq", dap.terminate, opts)
+            vim.keymap.set("n", "<leader>dB", function()
+                dap.set_breakpoint(vim.fn.input("Condition: "))
+            end, opts)
+            vim.keymap.set("n", "<leader>dl", function()
+                dap.set_breakpoint(nil, nil, vim.fn.input("Log message: "))
+            end, opts)
+            vim.keymap.set("n", "<leader>dC", dap.run_to_cursor, opts)
+            vim.keymap.set("n", "<leader>dL", dap.run_last, opts)
+            vim.keymap.set("n", "<leader>dR", dap.restart, opts)
+            -- Evaluate the expression under the cursor (or the visual selection) in a float.
+            vim.keymap.set({ "n", "v" }, "<leader>de", dapui.eval, opts)
+
+            -- IDE-style function keys for the step loop (F11 is fullscreen in Windows Terminal,
+            -- so step into also lives on Shift-F11 / <leader>di).
+            vim.keymap.set("n", "<F5>", dap.continue, opts)
+            vim.keymap.set("n", "<F9>", dap.toggle_breakpoint, opts)
+            vim.keymap.set("n", "<F10>", dap.step_over, opts)
+            vim.keymap.set("n", "<F11>", dap.step_into, opts)
+            vim.keymap.set("n", "<S-F11>", dap.step_out, opts)
+            vim.keymap.set("n", "<F12>", dap.step_out, opts)
         end,
     },
 

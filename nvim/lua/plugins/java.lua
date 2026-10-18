@@ -7,9 +7,9 @@
 return {
   {
     "mfussenegger/nvim-jdtls",
-    ft = "java",
+    lazy = true, -- loaded by require("jdtls") from the FileType autocmd below
     dependencies = { "mfussenegger/nvim-dap" },
-    config = function()
+    init = function()
       local mason = vim.fn.stdpath("data") .. "/mason/packages"
       local jdtls_dir = mason .. "/jdtls"
 
@@ -89,8 +89,13 @@ return {
         })
       end
 
-      -- lazy re-fires FileType after loading on ft=java, so this also covers the first buffer.
-      vim.api.nvim_create_autocmd("FileType", { pattern = "java", callback = attach })
+      -- init runs at startup, so this autocmd is the entry point; require("jdtls")
+      -- in attach() is what makes lazy load the plugin.
+      vim.api.nvim_create_autocmd("FileType", {
+        group = vim.api.nvim_create_augroup("user_jdtls", { clear = true }),
+        pattern = "java",
+        callback = attach,
+      })
     end,
   },
 }

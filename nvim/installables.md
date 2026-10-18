@@ -30,7 +30,7 @@
 - Go - `winget install GoLang.Go` (for gopls)
 - Rust - `winget install Rustlang.Rustup` (for rust_analyzer)
 - Terraform - `winget install Hashicorp.Terraform` (for terraformls)
-- JDK 21+ - `winget install Microsoft.OpenJDK.21` (runs jdtls via nvim-jdtls; jdtls/java-debug-adapter/java-test auto-installed by Mason)
+- JDK 21+ - `winget install EclipseAdoptium.Temurin.21.JDK --override "ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLLEVEL=1 /quiet"` (runs jdtls via nvim-jdtls; the override sets JAVA_HOME; jdtls/java-debug-adapter/java-test and lombok.jar come from Mason)
 
 ### Required by Telescope
 - ripgrep - `winget install BurntSushi.ripgrep.MSVC` (for live_grep)

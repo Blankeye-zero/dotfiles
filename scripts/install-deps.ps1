@@ -61,7 +61,7 @@ $nvimDeps = @(
     "GoLang.Go",                  # gopls
     "Rustlang.Rustup",            # rust_analyzer
     "Hashicorp.Terraform",        # terraformls
-    "Microsoft.OpenJDK.21",       # runs jdtls (nvim-jdtls); needs JDK 21+
+    "EclipseAdoptium.Temurin.21.JDK", # runs jdtls (nvim-jdtls); needs JDK 21+
     # Telescope
     "BurntSushi.ripgrep.MSVC",    # live_grep
     "sharkdp.fd",                 # find_files performance
@@ -73,6 +73,12 @@ $nvimDeps = @(
     "Git.Git",
     "GitHub.cli"                  # optional
 )
+
+# Extra installer arguments for packages whose defaults don't fit.
+$overrides = @{
+    # Temurin's MSI leaves JAVA_HOME unset by default; java.lua prefers $JAVA_HOME/bin/java.
+    "EclipseAdoptium.Temurin.21.JDK" = "ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLLEVEL=1 /quiet"
+}
 
 $packages = if ($NvimOnly) { $nvimDeps } else { $general + $nvimDeps }
 
@@ -93,7 +99,8 @@ $failed  = @()
 foreach ($pkg in $packages) {
     Write-Host ""
     Write-Host "=== $pkg ===" -ForegroundColor Cyan
-    winget install --id $pkg --exact --accept-source-agreements --accept-package-agreements --disable-interactivity
+    $extra = if ($overrides.ContainsKey($pkg)) { @("--override", $overrides[$pkg]) } else { @() }
+    winget install --id $pkg --exact --accept-source-agreements --accept-package-agreements --disable-interactivity @extra
     if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) {
         # 0 = installed; -1978335189 (0x8A15002B) = already installed / no applicable update
         $ok += $pkg
