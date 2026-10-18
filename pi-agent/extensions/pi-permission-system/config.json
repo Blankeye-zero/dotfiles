@@ -41,5 +41,5 @@
       "format *": "deny"
     }
   },
-  "yoloMode": false
+  "yoloMode": true
 }
