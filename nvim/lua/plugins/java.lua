@@ -57,6 +57,11 @@ return {
 
       local function attach()
         local jdtls = require("jdtls")
+        -- Register the java adapter ourselves before jdtls attaches: nvim-jdtls's own
+        -- setup_dap call is a no-op once the adapter exists, so only the first call's
+        -- overrides apply. Program output goes to dap-ui's console instead of a terminal
+        -- split (no stdin there; programs reading input need console = "integratedTerminal").
+        require("jdtls.dap").setup_dap({ config_overrides = { console = "internalConsole" } })
         local root = vim.fs.root(0, { "gradlew", "mvnw", "pom.xml", "build.gradle", "build.gradle.kts", ".git" })
           or vim.fn.getcwd()
         -- One workspace per project; jdtls corrupts state if two projects share one.

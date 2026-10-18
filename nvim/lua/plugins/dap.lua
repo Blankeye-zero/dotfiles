@@ -57,16 +57,13 @@ return {
             }
             dap.configurations.c = dap.configurations.cpp
 
-            -- Auto open/close the UI (breakpoints, scopes, variables, stacks) with the session.
-            -- Applies to every language's DAP session (cpp, go, ...), not just cpp.
+            -- Auto open the UI (breakpoints, scopes, variables, stacks) with the session.
+            -- Applies to every language's DAP session (cpp, go, java, ...).
+            -- It is deliberately NOT auto-closed on terminated/exited: the program's output
+            -- would vanish with it, and on Windows closing it while a debuggee terminal
+            -- buffer is exiting segfaults Neovim (0.12). Close it with <leader>du.
             dap.listeners.after.event_initialized["dapui_config"] = function()
                 dapui.open()
-            end
-            dap.listeners.before.event_terminated["dapui_config"] = function()
-                dapui.close()
-            end
-            dap.listeners.before.event_exited["dapui_config"] = function()
-                dapui.close()
             end
 
             local opts = { silent = true }
