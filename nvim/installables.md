@@ -1,6 +1,7 @@
-> **Automated install:** every winget package below can be installed in one shot with
-> `powershell -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\Projects\dotfiles\scripts\install-deps.ps1`
-> (add `-NvimOnly` to skip the general dev tools). Non-winget items remain manual (see script output).
+> **Automated install:** `powershell -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\Projects\dotfiles\scripts\install-deps.ps1`
+> shows a checkbox menu of every winget package below (plus Spring Boot CLI), installs the ticked ones and prints
+> each install path. `-NvimOnly` pre-ticks only the nvim deps; `-All` skips the menu; `-Only "Neovim,Spring*"`
+> installs just the named items. Other items remain manual (see script output).
 
 - nvm-windows - `winget install CoreyButler.NVMforWindows`
 - Node.js - via nvm: `nvm install 24.18.0` then `nvm use 24.18.0` (not winget)
@@ -23,6 +24,7 @@
 - Bun - `winget install Oven-sh.Bun` (required by build-pi.ps1)
 - vcpkg - `git clone https://github.com/Microsoft/vcpkg.git`
 - CMake - `winget install Kitware.CMake`
+- Spring Boot CLI - Not in winget; `install-deps.ps1` downloads the latest GA zip from Maven Central into `%LOCALAPPDATA%\Programs\spring-boot-cli`, adds its `bin` to the user PATH and sets `SPRING_HOME` (needs JDK 17+)
 
 ## Neovim Plugin Dependencies
 
