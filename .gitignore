@@ -39,3 +39,6 @@ dist/
 
 # --- install-deps.ps1 per-machine install locations ---
 scripts/install-paths.json
+
+# --- gt.ps1 per-machine saved paths ---
+gt-paths.json
