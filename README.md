@@ -78,6 +78,24 @@ https://raw.githubusercontent.com/tinted-theming/schemes/spec-0.11/base16/<name>
 host it anywhere, and share the URL — `theme.cmd -Validate <url>` is the
 test loop.
 
+## gt — jump to saved directories
+
+`gt.ps1` sits in the repo root, which is on `PATH`, so `gt` works from any
+PowerShell session without touching the profile.
+
+```powershell
+gt                   list saved names and paths
+gt <name>            cd to a saved path
+gt --add [path]      save path (default: current directory); prompts for a
+                     name, defaulting to the folder name
+gt --edit [name]     change an entry's path (. = current directory) and/or name
+gt --remove [name]   delete an entry (asks to confirm)
+```
+
+`--edit` and `--remove` show a numbered picker when no name is given. Entries
+are stored per machine in `gt-paths.json` (gitignored); copy
+`gt-paths.sample.json` to start, or just use `gt --add`.
+
 ## Setup
 
 Run `setup.ps1` once per machine to link the configs. If symlinks are
