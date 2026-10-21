@@ -13,10 +13,28 @@ return {
       local mason = vim.fn.stdpath("data") .. "/mason/packages"
       local jdtls_dir = mason .. "/jdtls"
 
+      local function java_bin()
+        return vim.env.JAVA_HOME and (vim.env.JAVA_HOME .. "/bin/java") or "java"
+      end
+
+      -- Run a command in a terminal split at the bottom. Re-running the same kind
+      -- (file / spring) kills the previous one first, so a Spring app doesn't keep the port.
+      local run_bufs = {}
+      local function run_in_term(kind, command, cwd)
+        local old = run_bufs[kind]
+        if old and vim.api.nvim_buf_is_valid(old) then
+          vim.api.nvim_buf_delete(old, { force = true })
+        end
+        vim.cmd("botright 15split | enew")
+        vim.fn.jobstart(command, { term = true, cwd = cwd })
+        run_bufs[kind] = vim.api.nvim_get_current_buf()
+        vim.cmd("normal! G") -- cursor on the last line so the window follows output
+      end
+
       -- Launch the equinox launcher jar directly instead of Mason's `jdtls` wrapper,
       -- which is a Python script and would add a Python dependency on Windows.
       local function cmd(workspace)
-        local java = vim.env.JAVA_HOME and (vim.env.JAVA_HOME .. "/bin/java") or "java"
+        local java = java_bin()
         local config_dir = vim.fn.has("win32") == 1 and "config_win"
           or vim.fn.has("mac") == 1 and "config_mac"
           or "config_linux"
@@ -90,6 +108,33 @@ return {
             vim.keymap.set("v", "<leader>jm", function() jdtls.extract_method(true) end, opts)
             vim.keymap.set("n", "<leader>jt", jdtls.test_nearest_method, opts)
             vim.keymap.set("n", "<leader>jT", jdtls.test_class, opts)
+
+            -- Run the current file with Java's single-file launcher (has stdin, unlike the
+            -- debugger's console). Only for self-contained files; use F5 for project code.
+            vim.keymap.set("n", "<leader>jr", function()
+              vim.cmd("write")
+              local file = vim.api.nvim_buf_get_name(bufnr)
+              run_in_term("file", { java_bin(), file }, vim.fs.dirname(file))
+            end, opts)
+
+            -- Run the Spring Boot app at the project root, preferring the project's wrapper.
+            vim.keymap.set("n", "<leader>js", function()
+              vim.cmd("wall")
+              local win = vim.fn.has("win32") == 1
+              local function has(f) return vim.uv.fs_stat(root .. "/" .. f) ~= nil end
+              local command
+              if has("pom.xml") then
+                local mvnw = win and "mvnw.cmd" or "mvnw"
+                command = { has(mvnw) and (root .. "/" .. mvnw) or "mvn", "spring-boot:run" }
+              elseif has("build.gradle") or has("build.gradle.kts") then
+                local gradlew = win and "gradlew.bat" or "gradlew"
+                command = { has(gradlew) and (root .. "/" .. gradlew) or "gradle", "bootRun" }
+              else
+                vim.notify("No pom.xml or build.gradle in " .. root, vim.log.levels.WARN)
+                return
+              end
+              run_in_term("spring", command, root)
+            end, opts)
           end,
         })
       end
