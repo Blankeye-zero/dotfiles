@@ -5,16 +5,23 @@
 
 .DESCRIPTION
     Shows a checkbox menu of every installable dependency, then installs only
-    the ticked ones. winget packages go through 'winget install' (already-
-    installed packages are skipped by winget itself). Spring Boot CLI is not on
-    winget, so it is downloaded from Maven Central into
+    the ticked ones. winget packages go through 'winget install --no-upgrade', so
+    packages that are already installed are left alone (never upgraded or moved).
+    Spring Boot CLI is not on winget, so it is downloaded from Maven Central into
     %LOCALAPPDATA%\Programs\spring-boot-cli and its bin is added to the user PATH.
+
+    The menu shows where each package is currently installed. Press P on an item
+    to choose a custom install location (e.g. D:\Program Files\Docker); custom
+    locations are saved to scripts\install-paths.json (gitignored, per machine)
+    and reused on later runs. A custom location only applies to fresh installs,
+    and only for installers that support one (winget --location; Docker Desktop
+    --installation-dir; Temurin INSTALLDIR).
 
     After each install the script prints where the package lives on disk, and
     repeats every path in the summary.
 
-    Menu keys: Up/Down (or k/j) move, Space toggle, A all/none, N nvim deps only,
-    Enter install, Esc/Q quit.
+    Menu keys: Up/Down (or k/j) move, Space toggle, P set install path,
+    A all/none, N nvim deps only, Enter install, Esc/Q quit.
 
     Items that are NOT installable here are printed as manual steps at the end:
       - 0xProto Font      (download from GitHub)
@@ -56,7 +63,7 @@ $ProgressPreference    = "SilentlyContinue"   # Invoke-WebRequest is very slow w
 #   Paths - known install locations (wildcards ok), checked before Cmd
 # ---------------------------------------------------------------------------
 function Pkg([string]$Name, [string]$Id, [string]$Group, [string]$Cmd, [string[]]$Paths = @(), [string]$Kind = "winget") {
-    [pscustomobject]@{ Name = $Name; Id = $Id; Group = $Group; Cmd = $Cmd; Paths = $Paths; Kind = $Kind; Selected = $false }
+    [pscustomobject]@{ Name = $Name; Id = $Id; Group = $Group; Cmd = $Cmd; Paths = $Paths; Kind = $Kind; Selected = $false; Location = $null; Current = $null }
 }
 
 $pf   = $env:ProgramFiles
@@ -105,6 +112,9 @@ $overrides = @{
     "EclipseAdoptium.Temurin.21.JDK" = "ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLLEVEL=1 /quiet"
 }
 
+# Saved custom install locations (winget id -> directory). Per machine, gitignored.
+$pathsFile = Join-Path $PSScriptRoot "install-paths.json"
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -112,7 +122,36 @@ function Update-SessionPath {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
 }
 
+function Read-SavedPaths($items) {
+    if (-not (Test-Path $pathsFile)) { return }
+    try {
+        $saved = Get-Content $pathsFile -Raw | ConvertFrom-Json
+        foreach ($it in $items) {
+            $p = $saved.PSObject.Properties[$it.Id]
+            if ($p -and $p.Value) { $it.Location = [string]$p.Value }
+        }
+    } catch {
+        Write-Host "WARNING: could not read $pathsFile ($_); ignoring saved paths." -ForegroundColor Yellow
+    }
+}
+
+function Save-Paths($items) {
+    $map = [ordered]@{}
+    foreach ($it in $items) { if ($it.Location) { $map[$it.Id] = $it.Location } }
+    if ($map.Count) {
+        $map | ConvertTo-Json | Set-Content -Path $pathsFile -Encoding utf8
+    } elseif (Test-Path $pathsFile) {
+        Remove-Item $pathsFile
+    }
+}
+
 function Resolve-InstallPath($item) {
+    if ($item.Location -and (Test-Path $item.Location)) {
+        if ($item.Cmd) {
+            $hit = Get-ChildItem -Path $item.Location -Recurse -Depth 3 -File -Include "$($item.Cmd).exe", "$($item.Cmd).bat", "$($item.Cmd).cmd" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($hit) { return $hit.FullName }
+        }
+    }
     foreach ($p in $item.Paths) {
         $hit = Get-Item -Path $p -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -Last 1
         if ($hit) { return $hit.FullName }
@@ -122,6 +161,23 @@ function Resolve-InstallPath($item) {
         if ($cmd) { return $cmd.Source }
     }
     return $null
+}
+
+function Read-Location($item) {
+    [Console]::CursorVisible = $true
+    Clear-Host
+    Write-Host "Install location for $($item.Name) ($($item.Id))" -ForegroundColor Cyan
+    Write-Host "  Currently installed: $(if ($item.Current) { $item.Current } else { '(not installed)' })"
+    Write-Host "  Custom location:     $(if ($item.Location) { $item.Location } else { '(installer default)' })"
+    if ($item.Current) {
+        Write-Host "  NOTE: already installed - a new location only applies after you uninstall it." -ForegroundColor Yellow
+    }
+    Write-Host ""
+    Write-Host "Enter a directory, '-' to reset to the installer default, or nothing to keep." -ForegroundColor DarkGray
+    $answer = (Read-Host "Path").Trim().Trim('"')
+    [Console]::CursorVisible = $false
+    if ($answer -eq "-") { $item.Location = $null }
+    elseif ($answer)     { $item.Location = [IO.Path]::GetFullPath($answer) }
 }
 
 function Show-Checklist($items) {
@@ -137,13 +193,18 @@ function Show-Checklist($items) {
 
             Clear-Host
             Write-Host "Select what to install" -ForegroundColor Cyan
-            Write-Host "  Up/Down move   Space toggle   A all/none   N nvim deps only   Enter install   Esc quit" -ForegroundColor DarkGray
+            Write-Host "  Up/Down move   Space toggle   P set path   A all/none   N nvim deps only   Enter install   Esc quit" -ForegroundColor DarkGray
             Write-Host ""
+            $width = [Console]::WindowWidth - 1
             for ($i = $top; $i -le $end; $i++) {
                 $it   = $items[$i]
                 $box  = if ($it.Selected) { "[x]" } else { "[ ]" }
                 $mark = if ($i -eq $cursor) { ">" } else { " " }
-                $line = "{0} {1} {2,-22} {3,-8} {4}" -f $mark, $box, $it.Name, $it.Group, $it.Id
+                $where = if ($it.Location -and -not $it.Current) { "-> $($it.Location)" }
+                         elseif ($it.Current) { $it.Current + $(if ($it.Location) { "   (custom: $($it.Location))" } else { "" }) }
+                         else { "(not installed)" }
+                $line = "{0} {1} {2,-22} {3,-8} {4}" -f $mark, $box, $it.Name, $it.Group, $where
+                if ($line.Length -gt $width) { $line = $line.Substring(0, $width - 3) + "..." }
                 if ($i -eq $cursor)  { Write-Host $line -ForegroundColor Black -BackgroundColor Gray }
                 elseif ($it.Selected) { Write-Host $line -ForegroundColor Green }
                 else                  { Write-Host $line }
@@ -162,6 +223,10 @@ function Show-Checklist($items) {
                 "PageUp"   { $cursor = [Math]::Max(0, $cursor - $height) }
                 "PageDown" { $cursor = [Math]::Min($items.Count - 1, $cursor + $height) }
                 "Spacebar" { $items[$cursor].Selected = -not $items[$cursor].Selected }
+                "P" {
+                    Read-Location $items[$cursor]
+                    Save-Paths $items
+                }
                 "A" {
                     $on = $count -lt $items.Count
                     $items | ForEach-Object { $_.Selected = $on }
@@ -177,17 +242,48 @@ function Show-Checklist($items) {
     }
 }
 
+# Quotes one argument for a Windows command line (MSVC CRT rules).
+# Windows PowerShell 5.1 mangles native arguments that contain both spaces and
+# quotes (e.g. --installation-dir="D:\Program Files\Docker"), so winget's
+# command line is built with this and passed to Start-Process as one string.
+function ConvertTo-CommandLineArg([string]$arg) {
+    if ($arg -and $arg -notmatch '[\s"]') { return $arg }
+    $escaped = [regex]::Replace($arg, '(\\*)"', { param($m) $m.Groups[1].Value * 2 + '\"' })
+    $escaped = [regex]::Replace($escaped, '(\\+)$', { param($m) $m.Groups[1].Value * 2 })
+    return '"' + $escaped + '"'
+}
+
 function Install-Winget($item) {
-    $extra = if ($overrides.ContainsKey($item.Id)) { @("--override", $overrides[$item.Id]) } else { @() }
-    winget install --id $item.Id --exact --accept-source-agreements --accept-package-agreements --disable-interactivity @extra
-    # 0 = installed; -1978335189 (0x8A15002B) = already installed / no applicable update
-    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) { return $true }
-    Write-Host "winget exit code $LASTEXITCODE" -ForegroundColor Red
+    $override = $overrides[$item.Id]
+    $extra = @()
+    if ($item.Location) {
+        $loc = $item.Location
+        if ($loc.Length -gt 3) { $loc = $loc.TrimEnd("\") }   # keep "D:\" intact
+        switch ($item.Id) {
+            # Docker's installer ignores winget --location; it takes its own flag.
+            "Docker.DockerDesktop" { $extra += @("--custom", "--installation-dir=`"$loc`"") }
+            # --override replaces winget's args (incl. --location), so add the MSI property ourselves.
+            "EclipseAdoptium.Temurin.21.JDK" { $override = "$override INSTALLDIR=`"$loc`"" }
+            default { $extra += @("--location", $loc) }
+        }
+        Write-Host "Install location: $loc"
+    }
+    if ($override) { $extra += @("--override", $override) }
+    # --no-upgrade: never upgrade (or relocate) a package that is already installed.
+    $argv = @("install", "--id", $item.Id, "--exact", "--no-upgrade",
+              "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity") + $extra
+    $proc = Start-Process winget -ArgumentList (($argv | ForEach-Object { ConvertTo-CommandLineArg $_ }) -join " ") -NoNewWindow -PassThru
+    $null = $proc.Handle   # without this, ExitCode stays empty for -NoNewWindow processes
+    $proc.WaitForExit()
+    $code = $proc.ExitCode
+    # 0 = installed; 0x8A15002B / 0x8A150061 = already installed (no upgrade performed)
+    if ($code -in 0, -1978335189, -1978335135) { return $true }
+    Write-Host "winget exit code $code" -ForegroundColor Red
     return $false
 }
 
-function Install-SpringBootCli {
-    $root = "$env:LOCALAPPDATA\Programs\spring-boot-cli"
+function Install-SpringBootCli($item) {
+    $root = if ($item.Location) { $item.Location } else { "$env:LOCALAPPDATA\Programs\spring-boot-cli" }
     $repo = "https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-cli"
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -241,7 +337,11 @@ if (-not (Get-Command "winget" -ErrorAction SilentlyContinue)) {
 # ---------------------------------------------------------------------------
 # Selection
 # ---------------------------------------------------------------------------
-foreach ($it in $items) { $it.Selected = (-not $NvimOnly) -or ($it.Group -eq "nvim") }
+Read-SavedPaths $items
+foreach ($it in $items) {
+    $it.Selected = (-not $NvimOnly) -or ($it.Group -eq "nvim")
+    $it.Current  = Resolve-InstallPath $it
+}
 
 if ($Only) {
     # 'powershell -File' passes "a,b" as a single string
@@ -272,7 +372,7 @@ $results = @()
 foreach ($it in $selected) {
     Write-Host ""
     Write-Host "=== $($it.Name) ($($it.Id)) ===" -ForegroundColor Cyan
-    $ok = if ($it.Kind -eq "springboot") { Install-SpringBootCli } else { Install-Winget $it }
+    $ok = if ($it.Kind -eq "springboot") { Install-SpringBootCli $it } else { Install-Winget $it }
 
     Update-SessionPath
     $path = Resolve-InstallPath $it

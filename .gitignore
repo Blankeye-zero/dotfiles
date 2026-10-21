@@ -36,3 +36,6 @@ dist/
 
 # pi ui-annotator screenshots
 .pi/annotations/
+
+# --- install-deps.ps1 per-machine install locations ---
+scripts/install-paths.json

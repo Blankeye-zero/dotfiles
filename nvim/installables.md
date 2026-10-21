@@ -2,6 +2,9 @@
 > shows a checkbox menu of every winget package below (plus Spring Boot CLI), installs the ticked ones and prints
 > each install path. `-NvimOnly` pre-ticks only the nvim deps; `-All` skips the menu; `-Only "Neovim,Spring*"`
 > installs just the named items. Other items remain manual (see script output).
+> Already-installed packages are never upgraded or moved (`winget install --no-upgrade`). Press `P` in the menu to
+> set a custom install location per item; it's saved to `scripts/install-paths.json` (gitignored) and applies to
+> fresh installs only.
 
 - nvm-windows - `winget install CoreyButler.NVMforWindows`
 - Node.js - via nvm: `nvm install 24.18.0` then `nvm use 24.18.0` (not winget)
